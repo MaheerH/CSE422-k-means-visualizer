@@ -1,0 +1,1571 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>K-Means Clustering Visualizer</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --c1: #e74c3c; --c2: #2ecc71; --c3: #3498db;
+    --c4: #f39c12; --c5: #9b59b6; --c6: #1abc9c;
+    --bg: #0f1117; --surface: #1a1d27; --surface2: #22263a;
+    --border: #2e3250; --text: #e8eaf0; --muted: #7b82a0;
+    --gold: #f1c40f; --accent: #3498db; --elbow: #f39c12;
+  }
+
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    line-height: 1.5;
+  }
+
+  /* ── HEADER ── */
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 14px 24px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  header h1 { font-size: 1.25rem; font-weight: 700; letter-spacing: .02em; }
+  header span { font-size: .85rem; color: var(--muted); }
+
+  /* ── PHASE TOGGLE ── */
+  #phase-toggle {
+    background: var(--surface2);
+    border-bottom: 1px solid var(--border);
+    padding: 0 24px;
+    display: flex;
+    gap: 0;
+  }
+  .phase-btn {
+    padding: 12px 22px;
+    background: transparent;
+    border: none;
+    border-bottom: 3px solid transparent;
+    color: var(--muted);
+    font-size: .88rem;
+    font-weight: 600;
+    cursor: pointer;
+    border-radius: 0;
+    transition: color .15s, border-color .15s;
+    letter-spacing: .01em;
+  }
+  .phase-btn:active { transform: none; }
+  .phase-btn:hover { color: var(--text); }
+  .phase-btn.active { color: var(--text); border-bottom-color: var(--accent); }
+  .phase-btn.p0.active { border-bottom-color: #9b59b6; }
+  .phase-btn.p2.active { border-bottom-color: var(--elbow); }
+  .phase-tag {
+    font-size: .65rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+    padding: 1px 5px; border-radius: 4px; margin-right: 6px; vertical-align: middle;
+  }
+  .phase-btn:not(.active) .phase-tag { background: var(--border); color: var(--muted); }
+  .phase-btn.active .phase-tag         { background: var(--accent); color: #fff; }
+  .phase-btn.p0.active .phase-tag      { background: #9b59b6; color: #fff; }
+  .phase-btn.p2.active .phase-tag      { background: var(--elbow); color: #000; }
+
+  /* ── PHASE 1 CONTROLS ── */
+  #controls {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 16px 24px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+    align-items: flex-end;
+  }
+  .ctrl-group { display: flex; flex-direction: column; gap: 4px; }
+  .ctrl-group label { font-size: .72rem; color: var(--muted); text-transform: uppercase; letter-spacing: .07em; }
+  .ctrl-group .hint { font-size: .68rem; color: var(--muted); opacity: .75; margin-top: 2px; }
+
+  select {
+    background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+    padding: 8px 12px; border-radius: 6px; font-size: .9rem; cursor: pointer;
+    appearance: none; padding-right: 28px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%237b82a0' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 10px center;
+  }
+  select:hover { border-color: var(--accent); }
+
+  button {
+    padding: 9px 18px; border-radius: 6px; border: none; font-size: .9rem;
+    font-weight: 600; cursor: pointer; transition: opacity .15s, transform .1s;
+  }
+  button:active { transform: scale(.97); }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover:not(:disabled) { opacity: .85; }
+  .btn-success { background: #27ae60; color: #fff; }
+  .btn-success:hover:not(:disabled) { opacity: .85; }
+  .btn-elbow { background: var(--elbow); color: #000; }
+  .btn-elbow:hover:not(:disabled) { opacity: .85; }
+  .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text); }
+  .btn-outline:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+  .btn-ghost { background: transparent; color: var(--muted); padding: 7px 14px; font-size: .85rem; }
+  .btn-ghost:hover { color: var(--text); }
+
+  /* ── PHASE 1 OVERVIEW ── */
+  #overview { padding: 24px; }
+  #runs-grid { display: flex; flex-wrap: wrap; gap: 20px; justify-content: center; margin-bottom: 36px; }
+  .run-panel {
+    background: var(--surface); border: 2px solid var(--border); border-radius: 12px;
+    overflow: hidden; display: flex; flex-direction: column; align-items: center; transition: border-color .2s;
+  }
+  .run-panel.best { border-color: var(--gold); box-shadow: 0 0 20px rgba(241,196,15,.2); }
+  .run-panel-header {
+    width: 100%; padding: 10px 14px; background: var(--surface2);
+    display: flex; justify-content: space-between; align-items: center; font-size: .85rem;
+  }
+  .run-title { font-weight: 700; }
+  .best-badge { background: var(--gold); color: #000; font-size: .7rem; font-weight: 800; padding: 2px 8px; border-radius: 20px; display: none; }
+  .run-panel.best .best-badge { display: inline; }
+  .run-canvas-wrap { padding: 10px; }
+  canvas.run-canvas { display: block; border-radius: 6px; background: #141722; }
+  .run-sse { font-size: .82rem; color: var(--muted); padding: 4px 14px 10px; text-align: center; }
+  .run-sse span { color: var(--text); font-weight: 700; font-size: .92rem; }
+  .inspect-btn { margin-bottom: 14px; }
+
+  /* ── SSE COMPARISON CHART ── */
+  #comparison-section {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    padding: 20px 24px; max-width: 700px; margin: 0 auto;
+  }
+  #comparison-section h2 { font-size: 1rem; margin-bottom: 4px; }
+  #comparison-section p { font-size: .75rem; color: var(--muted); margin-bottom: 16px; }
+  #comparison-chart-wrap { height: 200px; }
+
+  /* ── PHASE 1 INSPECT MODE ── */
+  #inspect { display: none; padding: 24px; max-width: 900px; margin: 0 auto; }
+  #inspect-header { display: flex; align-items: center; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; }
+  #inspect-title { font-size: 1.1rem; font-weight: 700; }
+  #inspect-subtitle { font-size: .82rem; color: var(--muted); }
+  #inspect-main { display: grid; grid-template-columns: 1fr 280px; gap: 20px; align-items: start; }
+  #inspect-canvas-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px; }
+  canvas#inspect-canvas { display: block; border-radius: 6px; background: #141722; width: 100%; }
+  #inspect-sidebar { display: flex; flex-direction: column; gap: 16px; }
+  #step-info { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
+  #step-label { font-size: 1.1rem; font-weight: 700; margin-bottom: 6px; }
+  #step-sse { font-size: .85rem; color: var(--muted); }
+  #step-sse span { color: var(--text); font-weight: 700; }
+  #inspect-nav { display: flex; gap: 8px; flex-wrap: wrap; }
+  #inspect-nav button { flex: 1; min-width: 80px; }
+  #sse-chart-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
+  #sse-chart-wrap h3 { font-size: .82rem; color: var(--muted); margin-bottom: 10px; text-transform: uppercase; letter-spacing: .06em; }
+  #sse-chart-wrap canvas { height: 150px !important; }
+
+  /* ── EMPTY STATE ── */
+  #empty-state { text-align: center; padding: 60px 20px; color: var(--muted); }
+  #empty-state .big { font-size: 3rem; margin-bottom: 12px; }
+  #empty-state p { max-width: 380px; margin: 0 auto; line-height: 1.6; }
+
+  /* ── LOADER (Phase 1) ── */
+  #loader { display: none; text-align: center; padding: 40px; color: var(--muted); font-size: .9rem; }
+  .spinner {
+    width: 36px; height: 36px; border: 3px solid var(--border); border-top-color: var(--accent);
+    border-radius: 50%; animation: spin .7s linear infinite; margin: 0 auto 14px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── PHASE 2 ── */
+  #phase2 { display: none; padding: 24px; max-width: 920px; margin: 0 auto; }
+  #p2-ctrl-bar {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    padding: 18px 22px; display: flex; flex-wrap: wrap; gap: 22px; align-items: flex-end; margin-bottom: 18px;
+  }
+  #p2-desc { font-size: .82rem; color: var(--muted); margin-bottom: 18px; padding: 10px 14px; background: var(--surface2); border-left: 3px solid var(--elbow); border-radius: 0 6px 6px 0; line-height: 1.5; }
+  #p2-notice { display: none; background: rgba(243,156,18,.12); border: 1px solid rgba(243,156,18,.4); border-radius: 8px; padding: 10px 16px; font-size: .82rem; color: #f5c842; margin-bottom: 16px; }
+  #p2-progress { display: none; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 20px 24px; margin-bottom: 20px; text-align: center; }
+  #p2-progress-label { font-size: .9rem; color: var(--muted); margin-bottom: 12px; }
+  #p2-progress-label span { color: var(--text); font-weight: 700; }
+  .progress-track { height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; }
+  .progress-fill { height: 100%; background: var(--elbow); border-radius: 4px; transition: width .25s ease; }
+  #p2-chart-section { display: none; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px 24px; margin-bottom: 20px; }
+  #p2-chart-section h2 { font-size: 1rem; font-weight: 700; margin-bottom: 4px; }
+  #p2-chart-section .sub { font-size: .75rem; color: var(--muted); margin-bottom: 16px; }
+  #elbow-chart-wrap { height: 340px; position: relative; }
+  #elbow-click-hint { font-size: .72rem; color: var(--muted); text-align: center; margin-top: 10px; }
+  #elbow-detail { display: none; background: var(--surface); border: 1px solid var(--elbow); border-radius: 12px; padding: 20px 24px; box-shadow: 0 0 24px rgba(243,156,18,.12); }
+  #elbow-detail-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px; }
+  #elbow-detail-title { font-size: 1rem; font-weight: 700; }
+  #elbow-detail-close { background: transparent; border: 1px solid var(--border); color: var(--muted); padding: 4px 12px; font-size: .8rem; border-radius: 5px; cursor: pointer; }
+  #elbow-detail-close:hover { color: var(--text); border-color: var(--text); }
+  #elbow-detail-close:active { transform: scale(.97); }
+  #elbow-detail-body { display: grid; grid-template-columns: 340px 1fr; gap: 24px; align-items: start; }
+  canvas#elbow-detail-canvas { display: block; border-radius: 8px; background: #141722; width: 100%; }
+  #elbow-detail-stats { display: flex; flex-direction: column; gap: 14px; }
+  .detail-stat { background: var(--surface2); border-radius: 8px; padding: 12px 16px; }
+  .detail-stat .ds-label { font-size: .7rem; color: var(--muted); text-transform: uppercase; letter-spacing: .07em; margin-bottom: 4px; }
+  .detail-stat .ds-val { font-size: 1.3rem; font-weight: 700; color: var(--text); }
+  .detail-stat .ds-sub { font-size: .75rem; color: var(--muted); margin-top: 2px; }
+  .detail-stat.highlight .ds-val { color: var(--elbow); }
+  #elbow-note { font-size: .8rem; color: var(--muted); background: var(--surface2); border-radius: 8px; padding: 10px 14px; line-height: 1.5; }
+
+  /* ══════════════════════════════════
+     PHASE 0: STEP-BY-STEP DEMO
+  ══════════════════════════════════ */
+  #phase0 { display: none; padding: 18px 24px 28px; }
+
+  /* Step header */
+  #p0-step-header {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px 20px; margin-bottom: 16px;
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .p0-step-meta { display: flex; align-items: baseline; gap: 10px; }
+  #p0-step-label { font-size: .72rem; color: var(--muted); text-transform: uppercase; letter-spacing: .07em; }
+  #p0-step-name  { font-size: 1.05rem; font-weight: 700; }
+  .p0-segs { display: flex; gap: 5px; }
+  .p0-seg {
+    height: 5px; flex: 1; max-width: 90px; border-radius: 3px;
+    background: var(--border); transition: background .3s;
+  }
+  .p0-seg.done   { background: #27ae60; }
+  .p0-seg.active { background: #9b59b6; }
+
+  /* Two-panel layout */
+  #p0-body {
+    display: grid; grid-template-columns: 60fr 40fr;
+    gap: 16px; margin-bottom: 14px; align-items: start;
+  }
+
+  /* Left: canvas panel */
+  #p0-left {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; overflow: hidden;
+  }
+  #p0-canvas {
+    display: block; cursor: crosshair; background: #000; width: 100%;
+    height: auto; /* will scale to container width */
+  }
+  #p0-canvas-footer {
+    padding: 10px 14px; background: var(--surface2);
+    border-top: 1px solid var(--border);
+    display: flex; align-items: center; gap: 12px;
+    flex-wrap: wrap; font-size: .82rem; color: var(--muted); min-height: 46px;
+  }
+
+  /* Right: calculation terminal */
+  #p0-right {
+    background: #0d1117; border: 1px solid #30363d; border-radius: 10px;
+    overflow: hidden; font-family: 'Consolas', 'Courier New', monospace;
+    font-size: .8rem; line-height: 1.75; color: #c9d1d9;
+  }
+  #p0-right-titlebar {
+    background: #161b22; border-bottom: 1px solid #30363d;
+    padding: 8px 14px; font-size: .72rem; color: #8b949e;
+    display: flex; align-items: center; gap: 7px;
+  }
+  .mac-d { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+  .mac-r { background: #ff5f56; } .mac-y { background: #ffbd2e; } .mac-g { background: #27c93f; }
+
+  #p0-calc {
+    padding: 14px 16px; max-height: 456px; overflow-y: auto;
+    scrollbar-width: thin; scrollbar-color: #30363d transparent;
+  }
+  #p0-calc::-webkit-scrollbar { width: 5px; }
+  #p0-calc::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
+
+  /* Calc typography helpers */
+  .hn  { color: #f1c40f; font-weight: 700; }
+  .hg  { color: #2ecc71; }
+  .hr  { color: #e74c3c; }
+  .hw  { color: #fff; font-weight: 700; }
+  .hm  { color: #8b949e; }
+
+  .c-head { color: #fff; font-weight: 700; font-size: .85rem; margin-bottom: 8px; }
+  .c-muted { color: #8b949e; line-height: 1.6; margin-bottom: 8px; }
+  .c-sep { border: none; border-top: 1px solid #21262d; margin: 10px 0; }
+  .c-block { margin-bottom: 10px; }
+  .c-in { padding-left: 16px; }
+  .c-log {
+    margin-top: 8px; padding-top: 8px; border-top: 1px dashed #21262d;
+    display: flex; flex-wrap: wrap; gap: 3px 10px;
+  }
+  .c-log-entry { font-size: .72rem; color: #8b949e; white-space: nowrap; }
+
+  /* Bottom nav */
+  #p0-nav {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  }
+  #p0-nav-right { display: flex; gap: 10px; align-items: center; }
+
+  #btn-p0-restart {
+    padding: 9px 16px; font-size: .82rem; font-weight: 600;
+    background: var(--surface2); color: var(--muted);
+    border: 1px solid var(--border); border-radius: 6px; cursor: pointer;
+  }
+  #btn-p0-restart:hover { color: var(--text); }
+  #btn-p0-restart:active { transform: scale(.97); }
+
+  #btn-p0-iterate {
+    display: none; padding: 10px 20px; font-size: .88rem; font-weight: 700;
+    background: #27ae60; color: #fff; border: none; border-radius: 7px; cursor: pointer;
+  }
+  #btn-p0-iterate:hover { opacity: .85; }
+  #btn-p0-iterate:active { transform: scale(.97); }
+
+  #btn-p0-next {
+    padding: 11px 28px; font-size: .95rem; font-weight: 700;
+    background: #9b59b6; color: #fff; border: none; border-radius: 7px; cursor: pointer;
+    transition: opacity .15s, transform .1s;
+  }
+  #btn-p0-next:hover:not(:disabled) { opacity: .85; }
+  #btn-p0-next:active:not(:disabled) { transform: scale(.97); }
+  #btn-p0-next:disabled { opacity: .3; cursor: not-allowed; }
+
+  #btn-p0-prev {
+    padding: 11px 20px; font-size: .9rem; font-weight: 600;
+    background: var(--surface2); color: var(--muted);
+    border: 1px solid var(--border); border-radius: 7px; cursor: pointer;
+    transition: opacity .15s, transform .1s;
+  }
+  #btn-p0-prev:hover:not(:disabled) { color: var(--text); border-color: var(--accent); }
+  #btn-p0-prev:active:not(:disabled) { transform: scale(.97); }
+  #btn-p0-prev:disabled { opacity: .3; cursor: not-allowed; }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width: 800px) {
+    #p0-body { grid-template-columns: 1fr; }
+    #inspect-main { grid-template-columns: 1fr; }
+    #controls { gap: 12px; }
+    #elbow-detail-body { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>K-Means Clustering Visualizer</h1>
+  <span>Interactive tool for exploring initialization sensitivity</span>
+</header>
+
+<!-- PHASE TOGGLE (3 tabs) -->
+<div id="phase-toggle">
+  <button class="phase-btn p0" id="phase0-btn" onclick="switchPhase(0)">
+    <span class="phase-tag">0</span>Step-by-Step Demo
+  </button>
+  <button class="phase-btn active" id="phase1-btn" onclick="switchPhase(1)">
+    <span class="phase-tag">1</span>Cluster Runs
+  </button>
+  <button class="phase-btn p2" id="phase2-btn" onclick="switchPhase(2)">
+    <span class="phase-tag">2</span>Elbow Method
+  </button>
+</div>
+
+<!-- ══════════════════════════════════════
+     PHASE 0: STEP-BY-STEP DEMO
+══════════════════════════════════════ -->
+<div id="phase0">
+
+  <!-- Step progress header -->
+  <div id="p0-step-header">
+    <div class="p0-step-meta">
+      <span id="p0-step-label">Step 1 of 6</span>
+      <span id="p0-step-name">Plot Your Data</span>
+    </div>
+    <div class="p0-segs">
+      <div class="p0-seg active" id="p0-seg-1"></div>
+      <div class="p0-seg"        id="p0-seg-2"></div>
+      <div class="p0-seg"        id="p0-seg-3"></div>
+      <div class="p0-seg"        id="p0-seg-4"></div>
+      <div class="p0-seg"        id="p0-seg-5"></div>
+      <div class="p0-seg"        id="p0-seg-6"></div>
+    </div>
+  </div>
+
+  <!-- Two panels -->
+  <div id="p0-body">
+
+    <!-- LEFT: Canvas -->
+    <div id="p0-left">
+      <canvas id="p0-canvas" width="500" height="420"></canvas>
+      <div id="p0-canvas-footer"></div>
+    </div>
+
+    <!-- RIGHT: Calculation terminal -->
+    <div id="p0-right">
+      <div id="p0-right-titlebar">
+        <span class="mac-d mac-r"></span>
+        <span class="mac-d mac-y"></span>
+        <span class="mac-d mac-g"></span>
+        <span style="margin-left:6px">kmeans_demo.py — calculations</span>
+      </div>
+      <div id="p0-calc"></div>
+    </div>
+
+  </div><!-- /p0-body -->
+
+  <!-- Nav -->
+  <div id="p0-nav">
+    <div>
+      <button id="btn-p0-restart" onclick="p0FullRestart()">↺ Full Restart</button>
+    </div>
+    <div id="p0-nav-right">
+      <button id="btn-p0-iterate" onclick="p0RunAnotherIteration()">⟳ Run Another Iteration</button>
+      <button id="btn-p0-prev" onclick="p0PrevStep()" disabled>← Prev Step</button>
+      <button id="btn-p0-next" onclick="p0NextStep()" disabled>Next Step →</button>
+    </div>
+  </div>
+
+</div><!-- /phase0 -->
+
+<!-- ══════════════════════════════════════
+     PHASE 1: CONTROLS
+══════════════════════════════════════ -->
+<div id="controls">
+  <div class="ctrl-group">
+    <label>Data</label>
+    <button class="btn-outline" id="btn-generate" onclick="generateData()">Generate Random Data</button>
+    <div class="hint">Places 25–35 random points on the canvas</div>
+  </div>
+  <div class="ctrl-group">
+    <label>K (clusters)</label>
+    <select id="k-select">
+      <option value="2">K = 2</option>
+      <option value="3" selected>K = 3</option>
+      <option value="4">K = 4</option>
+      <option value="5">K = 5</option>
+      <option value="6">K = 6</option>
+    </select>
+    <div class="hint">Number of clusters to find</div>
+  </div>
+  <div class="ctrl-group">
+    <label>Number of Runs</label>
+    <select id="runs-select">
+      <option value="2">2 Runs</option>
+      <option value="3" selected>3 Runs</option>
+      <option value="4">4 Runs</option>
+    </select>
+    <div class="hint">Runs with different random initializations</div>
+  </div>
+  <div class="ctrl-group">
+    <label>Action</label>
+    <button class="btn-success" id="btn-run" onclick="runAll()" disabled>Run All ▶</button>
+    <div class="hint">Runs all K-Means instances simultaneously</div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     PHASE 1: OVERVIEW MODE
+══════════════════════════════════════ -->
+<div id="overview">
+  <div id="empty-state">
+    <div class="big">⬡</div>
+    <p>Click <strong>Generate Random Data</strong> to place points, then <strong>Run All</strong> to see K-Means in action across multiple initializations.</p>
+  </div>
+  <div id="loader"><div class="spinner"></div>Running K-Means…</div>
+  <div id="runs-grid"></div>
+  <div id="comparison-section" style="display:none">
+    <h2>SSE Comparison Across Runs</h2>
+    <p>Lower SSE = tighter clusters. The highlighted bar is the best run.</p>
+    <div id="comparison-chart-wrap"><canvas id="comparison-chart"></canvas></div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     PHASE 1: INSPECT MODE
+══════════════════════════════════════ -->
+<div id="inspect">
+  <div id="inspect-header">
+    <button class="btn-ghost" onclick="exitInspect()">← Back to Overview</button>
+    <div>
+      <div id="inspect-title">Inspect Run</div>
+      <div id="inspect-subtitle">Step through each K-Means iteration</div>
+    </div>
+  </div>
+  <div id="inspect-main">
+    <div id="inspect-canvas-wrap">
+      <canvas id="inspect-canvas" width="650" height="500"></canvas>
+    </div>
+    <div id="inspect-sidebar">
+      <div id="step-info">
+        <div id="step-label">Iteration — of —</div>
+        <div id="step-sse">SSE: <span id="sse-val">—</span></div>
+      </div>
+      <div id="inspect-nav">
+        <button class="btn-outline" id="btn-prev" onclick="stepPrev()">← Prev</button>
+        <button class="btn-primary" id="btn-play" onclick="togglePlay()">▶ Play</button>
+        <button class="btn-outline" id="btn-next" onclick="stepNext()">Next →</button>
+      </div>
+      <div style="font-size:.7rem;color:var(--muted);text-align:center">
+        Prev/Next: move one iteration · Play: auto-advance every 700ms
+      </div>
+      <div id="sse-chart-wrap">
+        <h3>SSE over Iterations</h3>
+        <canvas id="sse-line-chart"></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     PHASE 2: ELBOW METHOD
+══════════════════════════════════════ -->
+<div id="phase2">
+  <div id="p2-ctrl-bar">
+    <div class="ctrl-group">
+      <label>K Range</label>
+      <select id="p2-krange">
+        <option value="5">K = 1 to 5</option>
+        <option value="8" selected>K = 1 to 8</option>
+        <option value="10">K = 1 to 10</option>
+      </select>
+      <div class="hint">Range of K values to evaluate</div>
+    </div>
+    <div class="ctrl-group">
+      <label>Attempts per K <span style="color:var(--elbow);font-size:.7rem;font-weight:700;margin-left:4px">(n_init)</span></label>
+      <select id="p2-ninit">
+        <option value="3">3 attempts</option>
+        <option value="5" selected>5 attempts</option>
+        <option value="10">10 attempts</option>
+      </select>
+      <div class="hint">How many random restarts per K value — higher = more reliable</div>
+    </div>
+    <div class="ctrl-group">
+      <label>Action</label>
+      <button class="btn-elbow" id="btn-elbow-run" onclick="runElbowAnalysis()">Run Elbow Analysis ⬡</button>
+      <div class="hint">Tests every K value across all attempts and plots best SSE</div>
+    </div>
+  </div>
+  <div id="p2-desc">
+    Finds the optimal K by running the full algorithm across multiple K values and plotting how cluster tightness (SSE) improves
+  </div>
+  <div id="p2-notice">
+    ⚠ Used auto-generated data. Go to Phase 1 to customize your data points.
+  </div>
+  <div id="p2-progress">
+    <div id="p2-progress-label">Running K = <span id="p2-prog-k">—</span> &nbsp;·&nbsp; Step <span id="p2-prog-step">0</span> of <span id="p2-prog-total">—</span></div>
+    <div class="progress-track"><div class="progress-fill" id="p2-prog-bar" style="width:0%"></div></div>
+  </div>
+  <div id="p2-chart-section">
+    <h2>Elbow Curve</h2>
+    <div class="sub">SSE decreases as K grows — the "elbow" marks the point of diminishing returns. Each point is the best SSE from <span id="p2-chart-ninit">—</span> attempts.</div>
+    <div id="elbow-chart-wrap"><canvas id="elbow-chart"></canvas></div>
+    <div id="elbow-click-hint">Click any point on the curve to inspect that clustering result →</div>
+  </div>
+  <div id="elbow-detail">
+    <div id="elbow-detail-header">
+      <div id="elbow-detail-title">K = — Detail</div>
+      <button id="elbow-detail-close" onclick="closeElbowDetail()">✕ Close</button>
+    </div>
+    <div id="elbow-detail-body">
+      <canvas id="elbow-detail-canvas" width="320" height="260"></canvas>
+      <div id="elbow-detail-stats">
+        <div class="detail-stat highlight">
+          <div class="ds-label">K value</div>
+          <div class="ds-val" id="dd-k">—</div>
+          <div class="ds-sub" id="dd-k-sub"></div>
+        </div>
+        <div class="detail-stat">
+          <div class="ds-label">Best SSE</div>
+          <div class="ds-val" id="dd-sse">—</div>
+          <div class="ds-sub">Sum of squared distances to cluster centroids</div>
+        </div>
+        <div class="detail-stat">
+          <div class="ds-label">Attempts Run</div>
+          <div class="ds-val" id="dd-attempts">—</div>
+          <div class="ds-sub">Random restarts used for this K</div>
+        </div>
+        <div id="elbow-note"></div>
+      </div>
+    </div>
+  </div>
+</div><!-- /phase2 -->
+
+<script>
+// ══════════════════════════════════════════════════
+//  CONSTANTS & SHARED STATE
+// ══════════════════════════════════════════════════
+const COLORS = ['#e74c3c','#2ecc71','#3498db','#f39c12','#9b59b6','#1abc9c'];
+const W = 400, H = 350;   // Phase 1 overview canvas
+const IW = 650, IH = 500; // Phase 1 inspect canvas
+const PAD = 28;
+
+let dataPoints  = [];   // shared [{x,y}] between Phase 1 and 2
+let currentPhase = 1;
+
+// Phase 1
+let allRuns    = [];
+let compChart  = null;
+let sseLineChart = null;
+let inspRun    = null;
+let inspStep   = 0;
+let playTimer  = null;
+let isPlaying  = false;
+
+// Phase 2
+let elbowResults   = [];
+let elbowChart     = null;
+let elbowDetectedK = null;
+
+// ══════════════════════════════════════════════════
+//  PHASE SWITCHING
+// ══════════════════════════════════════════════════
+function switchPhase(n) {
+  currentPhase = n;
+  document.getElementById('phase0-btn').classList.toggle('active', n === 0);
+  document.getElementById('phase1-btn').classList.toggle('active', n === 1);
+  document.getElementById('phase2-btn').classList.toggle('active', n === 2);
+
+  document.getElementById('phase0').style.display  = n === 0 ? 'block' : 'none';
+  document.getElementById('controls').style.display = n === 1 ? 'flex'  : 'none';
+  document.getElementById('overview').style.display  = n === 1 ? 'block' : 'none';
+  document.getElementById('phase2').style.display   = n === 2 ? 'block' : 'none';
+  document.getElementById('inspect').style.display  = 'none';
+
+  if (n === 0) p0OnEnter();
+}
+
+// ══════════════════════════════════════════════════
+//  K-MEANS ALGORITHM (shared)
+// ══════════════════════════════════════════════════
+function euclidean(a, b) { return Math.sqrt((a.x-b.x)**2 + (a.y-b.y)**2); }
+
+function calcSSE(points, assignments, centroids) {
+  let sse = 0;
+  points.forEach((p, i) => {
+    if (assignments[i] >= 0) { const c = centroids[assignments[i]]; sse += (p.x-c.x)**2 + (p.y-c.y)**2; }
+  });
+  return sse;
+}
+
+function assignClusters(points, centroids) {
+  return points.map(p => {
+    let best = 0, bestD = Infinity;
+    centroids.forEach((c, j) => { const d = euclidean(p, c); if (d < bestD) { bestD = d; best = j; } });
+    return best;
+  });
+}
+
+function updateCentroids(points, assignments, k) {
+  return Array.from({length: k}, (_, j) => {
+    const m = points.filter((_, i) => assignments[i] === j);
+    if (!m.length) return {...points[Math.floor(Math.random()*points.length)]};
+    return { x: m.reduce((s,p)=>s+p.x,0)/m.length, y: m.reduce((s,p)=>s+p.y,0)/m.length };
+  });
+}
+
+function deepCopyArr(arr) { return arr.map(o => ({...o})); }
+
+function runKMeans(points, k) {
+  const idx = [...Array(points.length).keys()];
+  for (let i = idx.length-1; i > 0; i--) { const j = Math.floor(Math.random()*(i+1)); [idx[i],idx[j]]=[idx[j],idx[i]]; }
+  let centroids = idx.slice(0,k).map(i => ({...points[i]}));
+  let assignments = new Array(points.length).fill(-1);
+  const history = [{ centroids: deepCopyArr(centroids), assignments: [...assignments], sse: null, label: 'Initial centroids' }];
+  for (let iter = 0; iter < 50; iter++) {
+    const newA = assignClusters(points, centroids);
+    const newC = updateCentroids(points, newA, k);
+    const sse  = calcSSE(points, newA, newC);
+    history.push({ centroids: deepCopyArr(newC), assignments: [...newA], sse, label: `Iteration ${iter+1}` });
+    const moved = centroids.some((c,j) => Math.abs(c.x-newC[j].x)>.001 || Math.abs(c.y-newC[j].y)>.001);
+    centroids = newC; assignments = newA;
+    if (!moved) break;
+  }
+  return { history, finalSSE: history[history.length-1].sse, k };
+}
+
+// ══════════════════════════════════════════════════
+//  PHASE 1: DATA GENERATION
+// ══════════════════════════════════════════════════
+function generateData() {
+  const n = 25 + Math.floor(Math.random()*11);
+  dataPoints = [];
+  const nc = 2 + Math.floor(Math.random()*4);
+  const centers = Array.from({length:nc}, ()=>({ x: PAD+Math.random()*(W-PAD*2), y: PAD+Math.random()*(H-PAD*2) }));
+  for (let i=0;i<n;i++) {
+    const c = centers[Math.floor(Math.random()*centers.length)];
+    const s = 40+Math.random()*40;
+    dataPoints.push({ x: Math.max(PAD,Math.min(W-PAD, c.x+(Math.random()-.5)*s*2)), y: Math.max(PAD,Math.min(H-PAD, c.y+(Math.random()-.5)*s*2)) });
+  }
+  allRuns = [];
+  document.getElementById('runs-grid').innerHTML = '';
+  document.getElementById('comparison-section').style.display = 'none';
+  document.getElementById('empty-state').style.display = 'none';
+  document.getElementById('btn-run').disabled = false;
+  if (compChart) { compChart.destroy(); compChart = null; }
+  showToast(`${n} points generated. Click Run All to cluster them.`);
+}
+
+// ══════════════════════════════════════════════════
+//  PHASE 1: RUN ALL
+// ══════════════════════════════════════════════════
+function runAll() {
+  if (dataPoints.length < 2) { showToast('Generate data first!'); return; }
+  const k = parseInt(document.getElementById('k-select').value);
+  const numRuns = parseInt(document.getElementById('runs-select').value);
+  document.getElementById('empty-state').style.display = 'none';
+  document.getElementById('loader').style.display = 'block';
+  document.getElementById('runs-grid').innerHTML = '';
+  document.getElementById('comparison-section').style.display = 'none';
+  document.getElementById('btn-run').disabled = true;
+  document.getElementById('btn-generate').disabled = true;
+  if (compChart) { compChart.destroy(); compChart = null; }
+  setTimeout(() => {
+    allRuns = [];
+    for (let i=0;i<numRuns;i++) allRuns.push(runKMeans(dataPoints,k));
+    const bestSSE = Math.min(...allRuns.map(r=>r.finalSSE));
+    allRuns.forEach((r,i) => { r.isBest = r.finalSSE===bestSSE; r.index=i; });
+    document.getElementById('loader').style.display = 'none';
+    document.getElementById('btn-run').disabled = false;
+    document.getElementById('btn-generate').disabled = false;
+    renderOverview();
+  }, 30);
+}
+
+// ══════════════════════════════════════════════════
+//  PHASE 1: OVERVIEW RENDERING
+// ══════════════════════════════════════════════════
+function renderOverview() {
+  const grid = document.getElementById('runs-grid');
+  grid.innerHTML = '';
+  allRuns.forEach((run,i) => {
+    const panel = document.createElement('div');
+    panel.className = 'run-panel'+(run.isBest?' best':'');
+    panel.id = `panel-${i}`;
+    const fs = run.history[run.history.length-1];
+    const iters = run.history.length-1;
+    panel.innerHTML = `
+      <div class="run-panel-header"><span class="run-title">Run ${i+1}</span><span class="best-badge">Best Run ✓</span></div>
+      <div class="run-canvas-wrap"><canvas class="run-canvas" id="canvas-run-${i}" width="${W}" height="${H}"></canvas></div>
+      <div class="run-sse">SSE: <span>${run.finalSSE.toFixed(1)}</span> &nbsp;|&nbsp; ${iters} iteration${iters!==1?'s':''}</div>
+      <button class="btn-outline inspect-btn" onclick="enterInspect(${i})">Inspect → <span style="font-size:.72rem;color:var(--muted);font-weight:400;display:block">Step through this run's iterations</span></button>`;
+    grid.appendChild(panel);
+    drawState(document.getElementById(`canvas-run-${i}`), dataPoints, fs.assignments, fs.centroids, run.k, W, H, false);
+  });
+  renderComparisonChart();
+}
+
+function renderComparisonChart() {
+  document.getElementById('comparison-section').style.display = 'block';
+  const bestSSE = Math.min(...allRuns.map(r=>r.finalSSE));
+  if (compChart) compChart.destroy();
+  const ctx = document.getElementById('comparison-chart').getContext('2d');
+  compChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: allRuns.map((_,i)=>`Run ${i+1}`),
+      datasets: [{ label:'Final SSE', data: allRuns.map(r=>parseFloat(r.finalSSE.toFixed(1))),
+        backgroundColor: allRuns.map(r=>r.finalSSE===bestSSE?'rgba(241,196,15,0.85)':'rgba(52,152,219,0.6)'),
+        borderColor:     allRuns.map(r=>r.finalSSE===bestSSE?'#f1c40f':'#3498db'),
+        borderWidth:2, borderRadius:5 }]
+    },
+    options: { responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{display:false}, tooltip:{callbacks:{label:ctx=>`SSE: ${ctx.raw.toLocaleString()}`}} },
+      scales:{ x:{ticks:{color:'#7b82a0'},grid:{color:'#2e3250'}}, y:{ticks:{color:'#7b82a0'},grid:{color:'#2e3250'},title:{display:true,text:'SSE',color:'#7b82a0'}} } }
+  });
+}
+
+// ══════════════════════════════════════════════════
+//  SHARED CANVAS DRAWING (Phase 1 & 2)
+// ══════════════════════════════════════════════════
+function drawState(canvas, points, assignments, centroids, k, cw, ch, showLines) {
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0,0,cw,ch);
+  ctx.strokeStyle = 'rgba(46,50,80,0.5)'; ctx.lineWidth = 1;
+  for (let x=PAD;x<cw-PAD;x+=40){ ctx.beginPath();ctx.moveTo(x,PAD);ctx.lineTo(x,ch-PAD);ctx.stroke(); }
+  for (let y=PAD;y<ch-PAD;y+=40){ ctx.beginPath();ctx.moveTo(PAD,y);ctx.lineTo(cw-PAD,y);ctx.stroke(); }
+  const sx=cw/W, sy=ch/H;
+  function cx(p){ return p.x*sx; } function cy(p){ return p.y*sy; }
+  if (showLines && centroids && assignments) {
+    centroids.forEach((c,j) => {
+      ctx.strokeStyle=COLORS[j%COLORS.length]+'44'; ctx.lineWidth=1;
+      points.forEach((p,i) => { if(assignments[i]===j){ ctx.beginPath();ctx.moveTo(cx(c),cy(c));ctx.lineTo(cx(p),cy(p));ctx.stroke(); } });
+    });
+  }
+  const R = showLines?7:6;
+  points.forEach((p,i) => {
+    const assigned = assignments && assignments[i]>=0;
+    const color = assigned?COLORS[assignments[i]%COLORS.length]:'#555e7a';
+    ctx.beginPath();ctx.arc(cx(p),cy(p),R,0,Math.PI*2);ctx.fillStyle=color;ctx.fill();
+    ctx.strokeStyle='#141722';ctx.lineWidth=1.5;ctx.stroke();
+  });
+  if (centroids) {
+    const XS=showLines?14:11;
+    centroids.forEach((c,j) => {
+      const color=COLORS[j%COLORS.length], px=cx(c), py=cy(c);
+      ctx.strokeStyle='#fff';ctx.lineWidth=5;ctx.lineCap='round';
+      ctx.beginPath();ctx.moveTo(px-XS,py-XS);ctx.lineTo(px+XS,py+XS);ctx.moveTo(px+XS,py-XS);ctx.lineTo(px-XS,py+XS);ctx.stroke();
+      ctx.strokeStyle=color;ctx.lineWidth=3;
+      ctx.beginPath();ctx.moveTo(px-XS,py-XS);ctx.lineTo(px+XS,py+XS);ctx.moveTo(px+XS,py-XS);ctx.lineTo(px-XS,py+XS);ctx.stroke();
+    });
+  }
+}
+
+// ══════════════════════════════════════════════════
+//  PHASE 1: INSPECT MODE
+// ══════════════════════════════════════════════════
+function enterInspect(runIndex) {
+  inspRun=allRuns[runIndex]; inspStep=0; isPlaying=false;
+  if(playTimer){clearInterval(playTimer);playTimer=null;}
+  document.getElementById('overview').style.display='none';
+  document.getElementById('controls').style.display='none';
+  document.getElementById('inspect').style.display='block';
+  document.getElementById('inspect-title').textContent=`Run ${runIndex+1} — Detailed View`;
+  document.getElementById('btn-play').textContent='▶ Play';
+  const canvas=document.getElementById('inspect-canvas'); canvas.width=IW; canvas.height=IH;
+  initSSELineChart(); renderInspectStep();
+}
+
+function exitInspect() {
+  if(playTimer){clearInterval(playTimer);playTimer=null;} isPlaying=false;
+  document.getElementById('inspect').style.display='none';
+  document.getElementById('overview').style.display='block';
+  document.getElementById('controls').style.display='flex';
+  if(sseLineChart){sseLineChart.destroy();sseLineChart=null;}
+}
+
+function renderInspectStep() {
+  if(!inspRun)return;
+  const state=inspRun.history[inspStep], totalSteps=inspRun.history.length-1;
+  drawState(document.getElementById('inspect-canvas'),dataPoints,state.assignments,state.centroids,inspRun.k,IW,IH,true);
+  document.getElementById('step-label').textContent=inspStep===0?'Initial Centroids (Random)':`Iteration ${inspStep} of ${totalSteps}`;
+  document.getElementById('sse-val').textContent=state.sse!==null?state.sse.toFixed(2):'— (not yet computed)';
+  document.getElementById('btn-prev').disabled=inspStep===0;
+  document.getElementById('btn-next').disabled=inspStep>=inspRun.history.length-1;
+  updateSSELineChart();
+}
+
+function stepPrev(){ if(inspStep>0){inspStep--;renderInspectStep();} }
+function stepNext(){ if(inspStep<inspRun.history.length-1){inspStep++;renderInspectStep();} }
+
+function togglePlay() {
+  isPlaying=!isPlaying;
+  const btn=document.getElementById('btn-play');
+  if(isPlaying){
+    btn.textContent='⏸ Pause';
+    playTimer=setInterval(()=>{
+      if(inspStep>=inspRun.history.length-1){isPlaying=false;btn.textContent='▶ Play';clearInterval(playTimer);return;}
+      inspStep++;renderInspectStep();
+    },700);
+  } else { btn.textContent='▶ Play';clearInterval(playTimer);playTimer=null; }
+}
+
+function initSSELineChart() {
+  if(sseLineChart)sseLineChart.destroy();
+  const sseValues=inspRun.history.filter(s=>s.sse!==null).map(s=>s.sse);
+  const sseLabels=inspRun.history.filter(s=>s.sse!==null).map((_,i)=>`Iter ${i+1}`);
+  sseLineChart=new Chart(document.getElementById('sse-line-chart').getContext('2d'),{
+    type:'line', data:{ labels:sseLabels, datasets:[{label:'SSE',data:sseValues.map(()=>null),borderColor:'#3498db',backgroundColor:'rgba(52,152,219,0.15)',pointBackgroundColor:'#3498db',pointRadius:4,tension:0.3,fill:true}]},
+    options:{responsive:true,maintainAspectRatio:false,animation:false,plugins:{legend:{display:false}},
+      scales:{x:{ticks:{color:'#7b82a0',font:{size:10}},grid:{color:'#2e3250'}},y:{ticks:{color:'#7b82a0',font:{size:10}},grid:{color:'#2e3250'}}}}
+  });
+  sseLineChart._allSSE=sseValues;
+}
+
+function updateSSELineChart() {
+  if(!sseLineChart)return;
+  const newData=sseLineChart._allSSE.map((v,i)=>i<inspStep?v:null);
+  sseLineChart.data.datasets[0].data=newData; sseLineChart.update();
+}
+
+// ══════════════════════════════════════════════════
+//  PHASE 2: ELBOW ANALYSIS
+// ══════════════════════════════════════════════════
+function ensureData() {
+  if(dataPoints.length>=2){ document.getElementById('p2-notice').style.display='none'; return; }
+  const n=30; dataPoints=[];
+  const nc=3+Math.floor(Math.random()*3);
+  const centers=Array.from({length:nc},()=>({x:PAD+Math.random()*(W-PAD*2),y:PAD+Math.random()*(H-PAD*2)}));
+  for(let i=0;i<n;i++){
+    const c=centers[Math.floor(Math.random()*centers.length)], s=45+Math.random()*35;
+    dataPoints.push({x:Math.max(PAD,Math.min(W-PAD,c.x+(Math.random()-.5)*s*2)),y:Math.max(PAD,Math.min(H-PAD,c.y+(Math.random()-.5)*s*2))});
+  }
+  document.getElementById('p2-notice').style.display='block';
+  document.getElementById('btn-run').disabled=false;
+}
+
+function detectElbow(results) {
+  if(results.length<3) return results[results.length-1].k;
+  let best=-Infinity, elbowK=results[1].k;
+  for(let i=1;i<results.length-1;i++){
+    const slow=(results[i-1].bestSSE-results[i].bestSSE)-(results[i].bestSSE-results[i+1].bestSSE);
+    if(slow>best){best=slow;elbowK=results[i].k;}
+  }
+  return elbowK;
+}
+
+function runElbowAnalysis() {
+  ensureData();
+  const maxK=parseInt(document.getElementById('p2-krange').value);
+  const nInit=parseInt(document.getElementById('p2-ninit').value);
+  const kValues=Array.from({length:maxK},(_,i)=>i+1);
+  document.getElementById('p2-chart-section').style.display='none';
+  document.getElementById('elbow-detail').style.display='none';
+  document.getElementById('p2-progress').style.display='block';
+  document.getElementById('btn-elbow-run').disabled=true;
+  document.getElementById('p2-prog-total').textContent=kValues.length;
+  document.getElementById('p2-prog-bar').style.width='0%';
+  if(elbowChart){elbowChart.destroy();elbowChart=null;}
+  elbowResults=[]; elbowDetectedK=null;
+  let kIdx=0;
+  function next(){
+    if(kIdx>=kValues.length){finishElbow(nInit);return;}
+    const k=kValues[kIdx];
+    document.getElementById('p2-prog-k').textContent=k;
+    document.getElementById('p2-prog-step').textContent=kIdx+1;
+    document.getElementById('p2-prog-bar').style.width=`${Math.round(kIdx/kValues.length*100)}%`;
+    let bestRun=null,bestSSE=Infinity;
+    for(let a=0;a<nInit;a++){const r=runKMeans(dataPoints,k);if(r.finalSSE<bestSSE){bestSSE=r.finalSSE;bestRun=r;}}
+    elbowResults.push({k,bestSSE,bestRun,attempts:nInit}); kIdx++;
+    setTimeout(next,8);
+  }
+  next();
+}
+
+function finishElbow(nInit) {
+  document.getElementById('p2-progress').style.display='none';
+  document.getElementById('btn-elbow-run').disabled=false;
+  elbowDetectedK=detectElbow(elbowResults);
+  document.getElementById('p2-chart-ninit').textContent=nInit;
+  document.getElementById('p2-chart-section').style.display='block';
+  renderElbowChart();
+}
+
+const elbowAnnotationPlugin={
+  id:'elbowAnnotation',
+  afterDraw(chart){
+    if(elbowDetectedK===null||!elbowResults.length)return;
+    const idx=elbowResults.findIndex(r=>r.k===elbowDetectedK);
+    if(idx<0)return;
+    const meta=chart.getDatasetMeta(0);
+    if(!meta.data[idx])return;
+    const pt=meta.data[idx],ctx2=chart.ctx,area=chart.chartArea;
+    ctx2.save();
+    ctx2.setLineDash([7,4]);ctx2.strokeStyle='#f39c12';ctx2.lineWidth=2;
+    ctx2.beginPath();ctx2.moveTo(pt.x,area.top);ctx2.lineTo(pt.x,area.bottom);ctx2.stroke();
+    ctx2.setLineDash([]);ctx2.fillStyle='#f39c12';ctx2.font='bold 12px "Segoe UI",sans-serif';ctx2.textAlign='center';
+    ctx2.fillText(`Suggested K = ${elbowDetectedK}`,pt.x,area.top-10);
+    ctx2.restore();
+  }
+};
+
+function renderElbowChart(){
+  const ptColors=elbowResults.map(r=>r.k===elbowDetectedK?'#f39c12':'#3498db');
+  const ptRadii =elbowResults.map(r=>r.k===elbowDetectedK?11:6);
+  const ptBW    =elbowResults.map(r=>r.k===elbowDetectedK?3:1.5);
+  const ptBC    =elbowResults.map(r=>r.k===elbowDetectedK?'#fff':'#3498db');
+  if(elbowChart)elbowChart.destroy();
+  elbowChart=new Chart(document.getElementById('elbow-chart').getContext('2d'),{
+    type:'line',
+    data:{labels:elbowResults.map(r=>`K = ${r.k}`),datasets:[{label:'Best SSE',data:elbowResults.map(r=>parseFloat(r.bestSSE.toFixed(2))),borderColor:'#3498db',borderWidth:2.5,backgroundColor:'rgba(52,152,219,0.08)',pointBackgroundColor:ptColors,pointRadius:ptRadii,pointBorderColor:ptBC,pointBorderWidth:ptBW,pointHoverRadius:ptRadii.map(r=>r+2),tension:0.35,fill:true}]},
+    options:{responsive:true,maintainAspectRatio:false,
+      onClick(evt){const els=elbowChart.getElementsAtEventForMode(evt,'nearest',{intersect:false},true);if(els.length>0)showElbowDetail(elbowResults[els[0].index].k);},
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>`Best SSE: ${ctx.raw.toLocaleString()}`}}},
+      scales:{x:{ticks:{color:'#7b82a0',font:{size:12}},grid:{color:'#2e3250'}},y:{ticks:{color:'#7b82a0',font:{size:12}},grid:{color:'#2e3250'},title:{display:true,text:'SSE (lower is better)',color:'#7b82a0',font:{size:12}}}},
+      layout:{padding:{top:28}}
+    },
+    plugins:[elbowAnnotationPlugin]
+  });
+}
+
+function showElbowDetail(k){
+  const result=elbowResults.find(r=>r.k===k); if(!result)return;
+  const isElbow=k===elbowDetectedK;
+  document.getElementById('elbow-detail').style.display='block';
+  document.getElementById('elbow-detail-title').textContent=`K = ${k} — Best Clustering Result${isElbow?' (Suggested Optimum)':''}`;
+  document.getElementById('dd-k').textContent=k;
+  document.getElementById('dd-k-sub').textContent=isElbow?'← Detected elbow point':'';
+  document.getElementById('dd-sse').textContent=result.bestSSE.toFixed(2);
+  document.getElementById('dd-attempts').textContent=result.attempts;
+  document.getElementById('elbow-note').textContent=`This was the best of ${result.attempts} attempt${result.attempts!==1?'s':''} for K = ${k}. `+(isElbow?`The elbow algorithm flagged this K as the point where adding more clusters gives diminishing SSE reduction.`:`Click other points on the curve to compare clustering results.`);
+  const fs=result.bestRun.history[result.bestRun.history.length-1];
+  const canvas=document.getElementById('elbow-detail-canvas');
+  canvas.width=320;canvas.height=260;
+  drawState(canvas,dataPoints,fs.assignments,fs.centroids,k,320,260,false);
+  document.getElementById('elbow-detail').scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+function closeElbowDetail(){ document.getElementById('elbow-detail').style.display='none'; }
+
+// ══════════════════════════════════════════════════
+//  PHASE 0: STEP-BY-STEP DEMO
+// ══════════════════════════════════════════════════
+const P0W = 500, P0H = 420;
+const P0_STEP_NAMES = [
+  'Plot Your Data',
+  'Place Centroids',
+  'Calculate Distances & Assign',
+  'Assignment Summary',
+  'Recalculate Centroids',
+  'SSE Calculation'
+];
+const CLUSTER_COLOR_NAMES = ['Red','Green','Blue','Orange','Purple','Teal'];
+
+let p0Step       = 1;
+let p0Points     = [];
+let p0K          = 3;
+let p0Centroids  = [];
+let p0OldCents   = [];
+let p0Assigns    = [];
+let p0Animating  = false;
+let p0ProcIdx    = 0;
+let p0ProcLog    = [];
+let p0AnimFrame  = null;
+let p0Ready      = false;
+let p0Snapshots  = [];
+let p0Iteration  = 1;
+let p0Converged  = false;
+const P0_TOL     = 1.0; // convergence tolerance in pixels
+
+// ── Entry point when switching to Phase 0 ──
+function p0OnEnter() {
+  if (!p0Ready) {
+    p0Ready = true;
+    const c = document.getElementById('p0-canvas');
+    c.width = P0W; c.height = P0H;
+    c.addEventListener('click', p0Click);
+    c.addEventListener('contextmenu', p0RightClick);
+    p0UpdateStepBar();
+    p0DrawGrid();
+    p0SetCalc(p0CalcStep1());
+    p0SetFooter();
+    p0UpdateNav();
+  }
+}
+
+// ── Coordinate mapping (handles CSS scaling) ──
+function p0Coords(e) {
+  const c = document.getElementById('p0-canvas'), r = c.getBoundingClientRect();
+  return { x: (e.clientX-r.left)*(c.width/r.width), y: (e.clientY-r.top)*(c.height/r.height) };
+}
+
+function p0Click(e) {
+  if (p0Step!==1||p0Animating) return;
+  const {x,y} = p0Coords(e);
+  p0Points.push({x,y});
+  p0RedrawStep1(); p0SetFooter(); p0UpdateNav();
+}
+
+function p0RightClick(e) {
+  e.preventDefault();
+  if (p0Step!==1||p0Animating) return;
+  const {x,y} = p0Coords(e);
+  const idx = p0Points.findIndex(p=>Math.hypot(p.x-x,p.y-y)<14);
+  if (idx>=0) { p0Points.splice(idx,1); p0RedrawStep1(); p0SetFooter(); p0UpdateNav(); }
+}
+
+// ── Step bar ──
+function p0UpdateStepBar() {
+  document.getElementById('p0-step-label').textContent = `Iteration ${p0Iteration} | Step ${p0Step} of 6`;
+  document.getElementById('p0-step-name').textContent  = P0_STEP_NAMES[p0Step-1];
+  for (let i=1;i<=6;i++) {
+    const el=document.getElementById(`p0-seg-${i}`);
+    if(!el) continue;
+    el.className='p0-seg '+(i<p0Step?'done':i===p0Step?'active':'');
+  }
+}
+
+// ── Footer below canvas ──
+function p0SetFooter(extra) {
+  const footer = document.getElementById('p0-canvas-footer');
+  if (p0Step===1) {
+    const minPts=p0K*2, ok=p0Points.length>=minPts;
+    footer.innerHTML=`
+      <span style="font-weight:700;color:${ok?'#2ecc71':'#e74c3c'}">Points placed: ${p0Points.length}</span>
+      <span style="color:var(--muted)">|</span>
+      <label style="color:var(--muted);white-space:nowrap;display:flex;align-items:center;gap:6px">K =
+        <select id="p0-k-sel" onchange="p0KChange()" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:4px 8px;border-radius:4px;font-size:.8rem;appearance:none;padding-right:22px;background-image:url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2212%22 height=%228%22 viewBox=%220 0 12 8%22%3E%3Cpath d=%22M1 1l5 5 5-5%22 stroke=%22%237b82a0%22 stroke-width=%221.5%22 fill=%22none%22 stroke-linecap=%22round%22/%3E%3C/svg%3E');background-repeat:no-repeat;background-position:right 6px center">
+          <option value="2" ${p0K===2?'selected':''}>2</option>
+          <option value="3" ${p0K===3?'selected':''}>3</option>
+          <option value="4" ${p0K===4?'selected':''}>4</option>
+          <option value="5" ${p0K===5?'selected':''}>5</option>
+        </select>
+      </label>
+      <span style="color:var(--muted)">· Need ≥ <strong style="color:var(--text)">${minPts}</strong> pts</span>`;
+  } else {
+    footer.innerHTML=`<span style="color:var(--muted)">K = <strong style="color:var(--text)">${p0K}</strong></span>
+      <span style="color:var(--muted)">|</span>
+      <span style="color:var(--muted)">Points: <strong style="color:var(--text)">${p0Points.length}</strong></span>
+      ${extra||''}`;
+  }
+}
+
+function p0KChange() {
+  p0K = parseInt(document.getElementById('p0-k-sel').value);
+  p0SetFooter(); p0UpdateNav();
+}
+
+// ── Nav ──
+function p0UpdateNav() {
+  const nextBtn=document.getElementById('btn-p0-next');
+  const iterBtn=document.getElementById('btn-p0-iterate');
+  const prevBtn=document.getElementById('btn-p0-prev');
+  const isStep6=p0Step===6;
+  nextBtn.style.display=isStep6?'none':'inline-block';
+  iterBtn.style.display=isStep6?'inline-block':'none';
+  if (!isStep6) {
+    if (p0Step===1) nextBtn.disabled=p0Points.length<p0K*2;
+    else nextBtn.disabled=p0Animating;
+  }
+  if (isStep6) iterBtn.disabled=p0Converged;
+  prevBtn.disabled=(p0Step===1&&p0Snapshots.length===0)||p0Animating;
+}
+
+// ── Calc panel ──
+function p0SetCalc(html) { document.getElementById('p0-calc').innerHTML=html; }
+
+// ════════════════════════════
+//  DRAWING HELPERS (Phase 0)
+// ════════════════════════════
+function p0Ctx() { return document.getElementById('p0-canvas').getContext('2d'); }
+
+function p0DrawGrid() {
+  const ctx=p0Ctx();
+  ctx.fillStyle='#000'; ctx.fillRect(0,0,P0W,P0H);
+  ctx.strokeStyle='#1a1a1a'; ctx.lineWidth=1;
+  for(let x=0;x<=P0W;x+=40){ ctx.beginPath();ctx.moveTo(x+.5,0);ctx.lineTo(x+.5,P0H);ctx.stroke(); }
+  for(let y=0;y<=P0H;y+=40){ ctx.beginPath();ctx.moveTo(0,y+.5);ctx.lineTo(P0W,y+.5);ctx.stroke(); }
+}
+
+function p0Dot(ctx,x,y,color,r=8,glowCol=null) {
+  ctx.save();
+  if(glowCol){ ctx.shadowColor=glowCol; ctx.shadowBlur=18; }
+  ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fillStyle=color; ctx.fill();
+  ctx.restore();
+  ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.strokeStyle='rgba(0,0,0,0.5)'; ctx.lineWidth=1.5; ctx.stroke();
+}
+
+function p0Cross(ctx,x,y,color,size=13,alpha=1,label='') {
+  ctx.save(); ctx.globalAlpha=alpha; ctx.lineCap='round';
+  ctx.strokeStyle='#fff'; ctx.lineWidth=5;
+  ctx.beginPath(); ctx.moveTo(x-size,y-size); ctx.lineTo(x+size,y+size); ctx.moveTo(x+size,y-size); ctx.lineTo(x-size,y+size); ctx.stroke();
+  ctx.strokeStyle=color; ctx.lineWidth=3;
+  ctx.beginPath(); ctx.moveTo(x-size,y-size); ctx.lineTo(x+size,y+size); ctx.moveTo(x+size,y-size); ctx.lineTo(x-size,y+size); ctx.stroke();
+  ctx.restore();
+  if (label) {
+    ctx.save(); ctx.globalAlpha=alpha; ctx.font='bold 11px "Segoe UI",sans-serif'; ctx.fillStyle=color; ctx.textBaseline='bottom';
+    ctx.fillText(label,x+size+3,y-size+2); ctx.restore();
+  }
+}
+
+function p0Arrow(ctx,x1,y1,x2,y2,color) {
+  if(Math.hypot(x2-x1,y2-y1)<4)return;
+  const angle=Math.atan2(y2-y1,x2-x1), hs=11;
+  ctx.save(); ctx.strokeStyle=color; ctx.globalAlpha=1.0; ctx.lineWidth=2; ctx.setLineDash([6,4]);
+  ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke(); ctx.setLineDash([]);
+  ctx.globalAlpha=1.0;
+  ctx.fillStyle=color;
+  ctx.beginPath(); ctx.moveTo(x2,y2); ctx.lineTo(x2-hs*Math.cos(angle-.4),y2-hs*Math.sin(angle-.4)); ctx.lineTo(x2-hs*Math.cos(angle+.4),y2-hs*Math.sin(angle+.4)); ctx.closePath(); ctx.fill();
+  ctx.restore();
+}
+
+function p0DrawAllCross(ctx,cents,alpha=1) {
+  cents.forEach((c,j)=>p0Cross(ctx,c.x,c.y,COLORS[j%COLORS.length],13,alpha,`C${j+1}`));
+}
+
+// ════════════════════════════
+//  STEP 1 — Plot Your Data
+// ════════════════════════════
+function p0RedrawStep1() {
+  p0DrawGrid();
+  const ctx=p0Ctx();
+  p0Points.forEach(p=>p0Dot(ctx,p.x,p.y,'#ffffff'));
+}
+
+function p0CalcStep1() {
+  return `<div class="c-block">
+<div class="c-head">// Step 1: Plot Your Data</div>
+<div class="c-muted">Click on the canvas to add data points.<br>Right-click a point to remove it.<br>Set your K (number of clusters) below.</div>
+<hr class="c-sep">
+<div class="c-muted">You need at least <span class="hn">K × 2</span> points<br>for a meaningful demo.</div>
+<hr class="c-sep">
+<div class="c-muted">When ready, click <span class="hw">Next Step →</span></div>
+</div>`;
+}
+
+// ════════════════════════════
+//  STEP 2 — Place Centroids
+// ════════════════════════════
+function p0EnterStep2() {
+  const pad=55;
+  p0Centroids=Array.from({length:p0K},()=>({x:pad+Math.random()*(P0W-pad*2),y:pad+Math.random()*(P0H-pad*2)}));
+  p0DrawGrid();
+  const ctx=p0Ctx();
+  p0Points.forEach(p=>p0Dot(ctx,p.x,p.y,'#fff'));
+  p0DrawAllCross(ctx,p0Centroids);
+
+  let html=`<div class="c-block">`;
+  html+=`<div class="c-head">// Step 2: Place Centroids</div>`;
+  html+=`<div class="c-muted">K = <span class="hn">${p0K}</span> centroids randomly initialized:</div>`;
+  html+=`<hr class="c-sep">`;
+  p0Centroids.forEach((c,j)=>{
+    html+=`<div><span style="color:${COLORS[j]};font-weight:700">C${j+1}</span> = (<span class="hn">${c.x.toFixed(2)}</span>, <span class="hn">${c.y.toFixed(2)}</span>)</div>`;
+  });
+  html+=`<hr class="c-sep">`;
+  html+=`<div class="c-muted">These are random starting positions.<br>Next: calculate distance from every data<br>point to each centroid.</div>`;
+  html+=`</div>`;
+  p0SetCalc(html);
+  document.getElementById('btn-p0-next').disabled=false;
+}
+
+// ════════════════════════════
+//  STEP 3 — Distances & Assign
+// ════════════════════════════
+function p0EnterStep3() {
+  p0ProcIdx=0; p0ProcLog=[];
+  p0Assigns=new Array(p0Points.length).fill(-1);
+  p0Animating=true;
+  document.getElementById('btn-p0-next').disabled=true;
+  p0ProcessNext();
+}
+
+function p0ProcessNext() {
+  if (p0ProcIdx>=p0Points.length) {
+    p0Animating=false;
+    p0DrawStep3Final();
+    p0SetCalcStep3Done();
+    p0UpdateNav();
+    return;
+  }
+  const pt=p0Points[p0ProcIdx];
+  const dists=p0Centroids.map((c,j)=>{ const dx=pt.x-c.x,dy=pt.y-c.y; return{j,c,dx,dy,d2:dx*dx+dy*dy,dist:Math.sqrt(dx*dx+dy*dy)}; });
+  const near=dists.reduce((a,b)=>a.dist<b.dist?a:b);
+  p0Assigns[p0ProcIdx]=near.j;
+
+  // Draw canvas frame
+  p0DrawGrid();
+  const ctx=p0Ctx();
+  for(let i=0;i<p0ProcIdx;i++){
+    const col=p0Assigns[i]>=0?COLORS[p0Assigns[i]%COLORS.length]:'#fff';
+    p0Dot(ctx,p0Points[i].x,p0Points[i].y,col);
+  }
+  for(let i=p0ProcIdx+1;i<p0Points.length;i++) p0Dot(ctx,p0Points[i].x,p0Points[i].y,'#fff');
+  // Dashed lines from pt to all centroids
+  dists.forEach(({j,c})=>{
+    ctx.save(); ctx.setLineDash([6,4]);
+    ctx.strokeStyle=COLORS[j%COLORS.length]; ctx.globalAlpha=1.0; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(pt.x,pt.y); ctx.lineTo(c.x,c.y); ctx.stroke();
+    ctx.globalAlpha=1.0; ctx.setLineDash([]);
+    ctx.restore();
+  });
+  p0Dot(ctx,pt.x,pt.y,COLORS[near.j%COLORS.length],9,'#fff'); // current point glowing
+  p0DrawAllCross(ctx,p0Centroids);
+
+  // Right panel
+  p0SetCalcStep3Current(pt,dists,near,p0ProcIdx);
+
+  p0ProcLog.push({pt,assignedJ:near.j});
+  p0ProcIdx++;
+  setTimeout(p0ProcessNext,400);
+}
+
+function p0DrawStep3Final() {
+  p0DrawGrid(); const ctx=p0Ctx();
+  p0Points.forEach((p,i)=>p0Dot(ctx,p.x,p.y,p0Assigns[i]>=0?COLORS[p0Assigns[i]%COLORS.length]:'#fff'));
+  p0DrawAllCross(ctx,p0Centroids);
+}
+
+function p0SetCalcStep3Current(pt,dists,near,idx) {
+  let html=`<div class="c-block">`;
+  html+=`<div class="c-head">// Processing Point ${idx+1} of ${p0Points.length}</div>`;
+  html+=`<hr class="c-sep">`;
+  html+=`<div>P(<span class="hn">${pt.x.toFixed(2)}</span>, <span class="hn">${pt.y.toFixed(2)}</span>)</div><br>`;
+  dists.forEach(({j,c,dx,dy,d2,dist})=>{
+    const col=COLORS[j%COLORS.length], isN=j===near.j;
+    html+=`<div style="${isN?`border-left:2px solid ${col};padding-left:8px;margin-bottom:8px`:'margin-bottom:8px;opacity:.75'}">`;
+    html+=`d(P→<span style="color:${col};font-weight:700">C${j+1}</span>) = √[(<span class="hn">${pt.x.toFixed(2)}</span>−<span class="hn">${c.x.toFixed(2)}</span>)² + (<span class="hn">${pt.y.toFixed(2)}</span>−<span class="hn">${c.y.toFixed(2)}</span>)²]<br>`;
+    html+=`&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;= √[(<span class="hn">${dx.toFixed(2)}</span>)² + (<span class="hn">${dy.toFixed(2)}</span>)²]<br>`;
+    html+=`&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;= √[<span class="hn">${(dx*dx).toFixed(2)}</span> + <span class="hn">${(dy*dy).toFixed(2)}</span>]<br>`;
+    html+=`&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;= √[<span class="hn">${d2.toFixed(2)}</span>]<br>`;
+    html+=`&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;= <span class="hn">${dist.toFixed(2)}</span>`;
+    html+=`</div>`;
+  });
+  html+=`<hr class="c-sep">`;
+  html+=`<div class="hg">→ Nearest: <strong>C${near.j+1}</strong> (dist = <span class="hn">${near.dist.toFixed(2)}</span>)</div>`;
+  html+=`<div class="hg">→ Assigned to Cluster ${near.j+1} ✓</div>`;
+  html+=`</div>`;
+  if(p0ProcLog.length>0){
+    html+=`<div class="c-log">`;
+    p0ProcLog.forEach(e=>{const col=COLORS[e.assignedJ%COLORS.length];html+=`<span class="c-log-entry">P(${e.pt.x.toFixed(0)},${e.pt.y.toFixed(0)})→<span style="color:${col}">C${e.assignedJ+1}</span>✓</span>`;});
+    html+=`</div>`;
+  }
+  p0SetCalc(html);
+}
+
+function p0SetCalcStep3Done() {
+  let html=`<div class="c-block"><div class="c-head">// All ${p0Points.length} points assigned!</div><hr class="c-sep">`;
+  html+=`<div class="c-log">`;
+  p0ProcLog.forEach(e=>{const col=COLORS[e.assignedJ%COLORS.length];html+=`<span class="c-log-entry">P(${e.pt.x.toFixed(0)},${e.pt.y.toFixed(0)})→<span style="color:${col}">C${e.assignedJ+1}</span>✓</span>`;});
+  html+=`</div><hr class="c-sep">`;
+  html+=`<div class="hg">✓ All distances calculated.<br>Click <span class="hw">Next Step →</span> to see the summary.</div></div>`;
+  p0SetCalc(html);
+}
+
+// ════════════════════════════
+//  STEP 4 — Assignment Summary
+// ════════════════════════════
+function p0EnterStep4() {
+  p0DrawGrid(); const ctx=p0Ctx();
+  p0Points.forEach((p,i)=>{
+    const j=p0Assigns[i]; if(j<0)return; const c=p0Centroids[j];
+    ctx.save(); ctx.strokeStyle=COLORS[j%COLORS.length]; ctx.globalAlpha=1.0; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(p.x,p.y); ctx.lineTo(c.x,c.y); ctx.stroke();
+    ctx.globalAlpha=1.0; ctx.restore();
+  });
+  p0Points.forEach((p,i)=>p0Dot(ctx,p.x,p.y,p0Assigns[i]>=0?COLORS[p0Assigns[i]%COLORS.length]:'#fff'));
+  p0DrawAllCross(ctx,p0Centroids);
+
+  let html=`<div class="c-block"><div class="c-head">// Assignment Complete</div><hr class="c-sep">`;
+  for(let j=0;j<p0K;j++){
+    const mems=p0Points.filter((_,i)=>p0Assigns[i]===j), col=COLORS[j%COLORS.length];
+    html+=`<div style="margin-bottom:10px">`;
+    html+=`<div><span style="color:${col};font-weight:700">Cluster ${j+1} (${CLUSTER_COLOR_NAMES[j]})</span>: <span class="hn">${mems.length}</span> points</div>`;
+    const mStr=mems.map(p=>`P(${p.x.toFixed(0)},${p.y.toFixed(0)})`).join(', ');
+    html+=`<div class="c-in" style="color:#8b949e;font-size:.75rem">${mStr||'(empty)'}</div></div>`;
+  }
+  html+=`<hr class="c-sep"><div class="c-muted">Next: recalculate centroid positions<br>as the <span class="hn">mean (average)</span> of each cluster's members.</div></div>`;
+  p0SetCalc(html);
+  document.getElementById('btn-p0-next').disabled=false;
+}
+
+// ════════════════════════════
+//  STEP 5 — Recalculate Centroids
+// ════════════════════════════
+function p0EnterStep5() {
+  // Compute new centroids
+  const newC=[];
+  for(let j=0;j<p0K;j++){
+    const mems=p0Points.filter((_,i)=>p0Assigns[i]===j);
+    if(!mems.length){ newC.push({...p0Centroids[j]}); continue; }
+    newC.push({x:mems.reduce((s,p)=>s+p.x,0)/mems.length, y:mems.reduce((s,p)=>s+p.y,0)/mems.length});
+  }
+  p0OldCents=[...p0Centroids.map(c=>({...c}))];
+
+  // Show math immediately (no need to wait for animation)
+  p0SetCalcStep5(p0OldCents,newC);
+
+  document.getElementById('btn-p0-next').disabled=true;
+  p0Animating=true;
+  const start=performance.now(), dur=850;
+
+  function frame(now) {
+    const t=Math.min(1,(now-start)/dur), ease=1-Math.pow(1-t,3);
+    const interp=p0OldCents.map((old,j)=>({x:old.x+(newC[j].x-old.x)*ease,y:old.y+(newC[j].y-old.y)*ease}));
+
+    p0DrawGrid(); const ctx=p0Ctx();
+    // Member lines to interpolated centroid
+    p0Points.forEach((p,i)=>{
+      const j=p0Assigns[i]; if(j<0)return;
+      ctx.save(); ctx.strokeStyle=COLORS[j%COLORS.length]; ctx.globalAlpha=1.0; ctx.lineWidth=2;
+      ctx.beginPath(); ctx.moveTo(p.x,p.y); ctx.lineTo(interp[j].x,interp[j].y); ctx.stroke();
+      ctx.globalAlpha=1.0; ctx.restore();
+    });
+    // Colored points
+    p0Points.forEach((p,i)=>p0Dot(ctx,p.x,p.y,p0Assigns[i]>=0?COLORS[p0Assigns[i]%COLORS.length]:'#fff'));
+    // Old centroids faded
+    p0OldCents.forEach((c,j)=>p0Cross(ctx,c.x,c.y,COLORS[j%COLORS.length],10,.22));
+    // Arrows old → new
+    p0OldCents.forEach((old,j)=>p0Arrow(ctx,old.x,old.y,newC[j].x,newC[j].y,COLORS[j%COLORS.length]));
+    // Animated centroids
+    interp.forEach((c,j)=>p0Cross(ctx,c.x,c.y,COLORS[j%COLORS.length],13,1,`C${j+1}`));
+
+    if(t<1){ p0AnimFrame=requestAnimationFrame(frame); }
+    else { p0Centroids=newC; p0Animating=false; p0UpdateNav(); }
+  }
+  p0AnimFrame=requestAnimationFrame(frame);
+}
+
+function p0SetCalcStep5(oldC,newC) {
+  let html=`<div class="c-block"><div class="c-head">// Recalculating Centroids</div><hr class="c-sep">`;
+  for(let j=0;j<p0K;j++){
+    const mems=p0Points.filter((_,i)=>p0Assigns[i]===j), col=COLORS[j%COLORS.length];
+    const moved=Math.hypot(newC[j].x-oldC[j].x,newC[j].y-oldC[j].y);
+    html+=`<div style="margin-bottom:14px">`;
+    html+=`<div><span style="color:${col};font-weight:700">New C${j+1}</span> = mean of Cluster ${j+1} (<span class="hn">${mems.length}</span> pts):</div>`;
+    if(!mems.length){
+      html+=`<div class="c-in hm">(empty — centroid unchanged)</div>`;
+    } else {
+      const xVals=mems.map(p=>p.x.toFixed(2)), yVals=mems.map(p=>p.y.toFixed(2));
+      const xSum=mems.reduce((s,p)=>s+p.x,0), ySum=mems.reduce((s,p)=>s+p.y,0);
+      html+=`<div class="c-in">x = (<span class="hn">${xVals.join(' + ')}</span>) / <span class="hn">${mems.length}</span></div>`;
+      html+=`<div class="c-in">&nbsp;&nbsp;= <span class="hn">${xSum.toFixed(2)}</span> / <span class="hn">${mems.length}</span> = <span class="hn">${newC[j].x.toFixed(2)}</span></div>`;
+      html+=`<div class="c-in">y = (<span class="hn">${yVals.join(' + ')}</span>) / <span class="hn">${mems.length}</span></div>`;
+      html+=`<div class="c-in">&nbsp;&nbsp;= <span class="hn">${ySum.toFixed(2)}</span> / <span class="hn">${mems.length}</span> = <span class="hn">${newC[j].y.toFixed(2)}</span></div>`;
+    }
+    html+=`<div class="c-in hm" style="margin-top:3px">C${j+1}: (<span class="hn">${oldC[j].x.toFixed(2)}</span>,<span class="hn">${oldC[j].y.toFixed(2)}</span>) → (<span class="hn">${newC[j].x.toFixed(2)}</span>,<span class="hn">${newC[j].y.toFixed(2)}</span>)`;
+    html+=` &nbsp;|&nbsp; moved: <span class="hn">${moved.toFixed(2)}</span> units</div></div>`;
+  }
+  html+=`</div>`;
+  p0SetCalc(html);
+}
+
+// ════════════════════════════
+//  STEP 6 — SSE Calculation
+// ════════════════════════════
+function p0EnterStep6() {
+  p0DrawGrid(); const ctx=p0Ctx();
+  p0Points.forEach((p,i)=>{
+    const j=p0Assigns[i]; if(j<0)return; const c=p0Centroids[j];
+    ctx.save(); ctx.strokeStyle=COLORS[j%COLORS.length]; ctx.globalAlpha=1.0; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(p.x,p.y); ctx.lineTo(c.x,c.y); ctx.stroke();
+    ctx.globalAlpha=1.0; ctx.restore();
+  });
+  p0Points.forEach((p,i)=>p0Dot(ctx,p.x,p.y,p0Assigns[i]>=0?COLORS[p0Assigns[i]%COLORS.length]:'#fff'));
+  p0DrawAllCross(ctx,p0Centroids);
+
+  let totalSSE=0; const clSSEs=[];
+  let html=`<div class="c-block">`;
+  html+=`<div class="c-head">// SSE (Sum of Squared Errors)</div>`;
+  html+=`<div class="c-muted">Measures cluster tightness. Lower = better.</div>`;
+
+  for(let j=0;j<p0K;j++){
+    const mems=p0Points.filter((_,i)=>p0Assigns[i]===j), c=p0Centroids[j], col=COLORS[j%COLORS.length];
+    let clSSE=0;
+    html+=`<hr class="c-sep"><div style="color:${col};font-weight:700;margin-bottom:5px">── Cluster ${j+1} (${CLUSTER_COLOR_NAMES[j]}) ──</div>`;
+    mems.forEach(p=>{
+      const dx=p.x-c.x, dy=p.y-c.y, dx2=dx*dx, dy2=dy*dy, contrib=dx2+dy2;
+      clSSE+=contrib;
+      html+=`<div>P(<span class="hn">${p.x.toFixed(1)}</span>,<span class="hn">${p.y.toFixed(1)}</span>): `;
+      html+=`(<span class="hn">${dx.toFixed(2)}</span>)² + (<span class="hn">${dy.toFixed(2)}</span>)² = `;
+      html+=`<span class="hn">${dx2.toFixed(2)}</span> + <span class="hn">${dy2.toFixed(2)}</span> = <span class="hn">${contrib.toFixed(2)}</span></div>`;
+    });
+    html+=`<div style="color:${col};margin-top:3px">Cluster ${j+1} SSE = <span class="hn">${clSSE.toFixed(2)}</span></div>`;
+    clSSEs.push(clSSE); totalSSE+=clSSE;
+  }
+
+  html+=`<hr class="c-sep">`;
+  html+=`<div style="border-top:2px solid #444;padding-top:8px">`;
+  html+=`<div>Total SSE = ${clSSEs.map(s=>s.toFixed(2)).join(' + ')}</div>`;
+  html+=`<div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;= <span class="hn" style="font-size:1.05rem">${totalSSE.toFixed(2)}</span></div>`;
+  html+=`</div>`;
+
+  // Movements
+  const movements=p0OldCents.length===p0K
+    ? p0OldCents.map((old,j)=>Math.hypot(old.x-p0Centroids[j].x,old.y-p0Centroids[j].y))
+    : p0Centroids.map(()=>0);
+
+  html+=`<hr class="c-sep"><div class="c-muted">Centroid movement this iteration:</div>`;
+  const maxMov=Math.max(...movements);
+  p0Converged=maxMov<P0_TOL;
+  movements.forEach((m,j)=>{
+    const stable=m<P0_TOL;
+    html+=`<div><span style="color:${COLORS[j%COLORS.length]}">C${j+1}</span> moved: <span class="hn">${m.toFixed(2)}</span> px`;
+    html+=stable
+      ? ` <span class="hm">— nearly stable</span>`
+      : ` <span style="color:#e74c3c">— still adjusting</span>`;
+    html+=`</div>`;
+  });
+
+  html+=`<hr class="c-sep">`;
+  if(p0Converged){
+    html+=`<div class="hg" style="margin-bottom:10px">✓ Converged! Centroids have stabilized.</div>`;
+    html+=`<div style="background:#0d2818;border:1px solid #27ae60;border-radius:6px;padding:10px 12px;line-height:1.8">`;
+    html+=`<div style="color:#27ae60;font-weight:700;margin-bottom:4px">Convergence Summary</div>`;
+    html+=`<div>Total iterations run: <span class="hn">${p0Iteration}</span></div>`;
+    html+=`<div>Final SSE: <span class="hn">${totalSSE.toFixed(2)}</span></div>`;
+    html+=`<div class="hm" style="margin-top:4px;font-size:.75rem">All centroids moved less than <span class="hn">${P0_TOL}</span> px —<br>further iterations would not change the result.</div>`;
+    html+=`</div>`;
+  } else {
+    html+=`<div style="color:#f39c12">⟳ Not yet converged.<br>&nbsp;&nbsp;Click <span style="color:#27ae60;font-weight:700">Run Another Iteration</span> to continue.</div>`;
+  }
+  html+=`</div>`;
+  p0SetCalc(html);
+  p0UpdateNav(); // shows iterate button (disabled if converged), hides next
+}
+
+// ════════════════════════════
+//  STEP NAVIGATION
+// ════════════════════════════
+function p0NextStep() {
+  if(p0Step>=6)return;
+  // Save snapshot of current step before advancing
+  const canvas=document.getElementById('p0-canvas');
+  const ctx=canvas.getContext('2d');
+  p0Snapshots.push({
+    imageData: ctx.getImageData(0,0,P0W,P0H),
+    calcHtml: document.getElementById('p0-calc').innerHTML,
+    step: p0Step,
+    iteration: p0Iteration,
+    converged: p0Converged,
+    centroids: p0Centroids.map(c=>({...c})),
+    assigns: [...p0Assigns],
+    oldCents: p0OldCents.map(c=>({...c}))
+  });
+  p0Step++;
+  p0UpdateStepBar();
+  p0SetFooter();
+  switch(p0Step){
+    case 2: p0EnterStep2(); break;
+    case 3: p0EnterStep3(); break;
+    case 4: p0EnterStep4(); break;
+    case 5: p0EnterStep5(); break;
+    case 6: p0EnterStep6(); break;
+  }
+}
+
+function p0PrevStep() {
+  if(p0Snapshots.length===0||p0Animating)return;
+  const snap=p0Snapshots.pop();
+  const canvas=document.getElementById('p0-canvas');
+  canvas.getContext('2d').putImageData(snap.imageData,0,0);
+  document.getElementById('p0-calc').innerHTML=snap.calcHtml;
+  p0Step=snap.step;
+  p0Iteration=snap.iteration;
+  p0Converged=snap.converged;
+  p0Centroids=snap.centroids;
+  p0Assigns=snap.assigns;
+  p0OldCents=snap.oldCents;
+  p0UpdateStepBar();
+  p0SetFooter();
+  p0UpdateNav();
+}
+
+function p0RunAnotherIteration() {
+  if(p0Converged)return;
+  // Save snapshot of current step 6 before leaving (enables Prev Step to return here)
+  const canvas=document.getElementById('p0-canvas');
+  const ctx=canvas.getContext('2d');
+  p0Snapshots.push({
+    imageData: ctx.getImageData(0,0,P0W,P0H),
+    calcHtml: document.getElementById('p0-calc').innerHTML,
+    step: p0Step,
+    iteration: p0Iteration,
+    converged: p0Converged,
+    centroids: p0Centroids.map(c=>({...c})),
+    assigns: [...p0Assigns],
+    oldCents: p0OldCents.map(c=>({...c}))
+  });
+  // Advance to next iteration at Step 3 with updated centroids
+  p0Iteration++;
+  p0Converged=false;
+  p0Step=3;
+  p0UpdateStepBar();
+  p0SetFooter();
+  document.getElementById('btn-p0-next').style.display='inline-block';
+  p0EnterStep3();
+  p0UpdateNav();
+}
+
+function p0FullRestart() {
+  if(p0AnimFrame){cancelAnimationFrame(p0AnimFrame);p0AnimFrame=null;}
+  p0Step=1; p0Points=[]; p0K=3; p0Centroids=[]; p0OldCents=[]; p0Assigns=[];
+  p0ProcLog=[]; p0ProcIdx=0; p0Animating=false; p0Snapshots=[];
+  p0Iteration=1; p0Converged=false;
+  p0UpdateStepBar(); p0RedrawStep1();
+  p0SetCalc(p0CalcStep1()); p0SetFooter(); p0UpdateNav();
+}
+
+// ══════════════════════════════════════════════════
+//  TOAST
+// ══════════════════════════════════════════════════
+function showToast(msg) {
+  let t=document.getElementById('toast');
+  if(!t){
+    t=document.createElement('div'); t.id='toast';
+    t.style.cssText=`position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#22263a;border:1px solid #3498db;color:#e8eaf0;padding:10px 20px;border-radius:8px;font-size:.85rem;z-index:9999;transition:opacity .3s;pointer-events:none;`;
+    document.body.appendChild(t);
+  }
+  t.textContent=msg; t.style.opacity='1';
+  clearTimeout(t._timer); t._timer=setTimeout(()=>{t.style.opacity='0';},2500);
+}
+</script>
+</body>
+</html>
