@@ -237,10 +237,18 @@
   }
 
   /* Left: canvas panel */
-  #p0-left {
-    background: var(--surface); border: 1px solid var(--border);
-    border-radius: 10px; overflow: hidden;
-  }
+  #p0-canvas {
+  display: block;
+  cursor: crosshair;
+  background: #000;
+
+  /* Responsive sizing */
+  width: min(100%, 81vh, 720px);
+  height: auto;
+
+  /* Keep the canvas centered */
+  margin: 0 auto;
+}
   #p0-canvas {
     display: block; cursor: crosshair; background: #000; width: 100%;
     height: auto; /* will scale to container width */
@@ -338,6 +346,30 @@
     #controls { gap: 12px; }
     #elbow-detail-body { grid-template-columns: 1fr; }
   }
+
+  /* Responsive Step-by-Step Demo */
+@media (max-width: 800px) {
+  #p0-body {
+    grid-template-columns: 1fr;
+  }
+
+  #p0-canvas {
+    width: min(100%, 81vh, 720px);
+  }
+
+  #p0-calc {
+    max-height: 350px;
+  }
+
+  #p0-nav {
+    flex-wrap: wrap;
+  }
+
+  #p0-nav-right {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+}
 </style>
 </head>
 <body>
